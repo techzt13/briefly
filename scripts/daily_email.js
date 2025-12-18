@@ -1,12 +1,22 @@
 const { createClient } = require('@supabase/supabase-js');
 const Parser = require('rss-parser');
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 
-// NOTE: These process.env variables come from GitHub Secrets, NOT your local file
+// 1. Setup Database
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-const resend = new Resend(process.env.RESEND_KEY);
+
+// 2. Setup Gmail Transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
 const parser = new Parser();
 
+// RSS Feeds Source List
 const FEEDS = {
   technology: 'http://feeds.bbci.co.uk/news/technology/rss.xml',
   finance: 'https://feeds.content.dowjones.com/public/rss/mw_topstories',
@@ -23,12 +33,15 @@ const FEEDS = {
 };
 
 async function run() {
-  console.log("🚀 Starting Daily Brief...");
+  console.log("🚀 Starting Daily Brief via Gmail...");
+
+  // Get all subscribers
   const { data: subscribers, error } = await supabase.from('subscribers').select('*');
   if (error) { console.error(error); process.exit(1); }
 
   const newsCache = {};
-  // Fetch news for all categories
+
+  // Fetch News
   for (const [category, url] of Object.entries(FEEDS)) {
     try {
       const feed = await parser.parseURL(url);
@@ -36,16 +49,16 @@ async function run() {
     } catch (e) { newsCache[category] = []; }
   }
 
-  // Generate personalized emails
+  // Send Emails
   for (const user of subscribers) {
-    let emailBody = `<h1>Briefly.</h1><p>Your Daily Digest</p>`;
+    let emailBody = `<h1 style="font-family: sans-serif;">Briefly.</h1><p>Your Daily Digest</p>`;
     let hasContent = false;
 
     if (user.interests) {
       for (const interest of user.interests) {
         if (newsCache[interest]?.length > 0) {
           hasContent = true;
-          emailBody += `<h2>${interest.toUpperCase()}</h2>`;
+          emailBody += `<h2 style="text-transform: capitalize;">${interest}</h2>`;
           newsCache[interest].forEach(item => {
             emailBody += `<p><a href="${item.link}">${item.title}</a></p>`;
           });
@@ -54,13 +67,18 @@ async function run() {
     }
 
     if (hasContent) {
-      await resend.emails.send({
-        from: 'Briefly <onboarding@resend.dev>',
-        to: [user.email],
-        subject: 'Your Daily Briefly',
-        html: emailBody,
-      });
-      console.log(`Sent to ${user.email}`);
+      try {
+        // Sends email appearing as "Briefly News"
+        await transporter.sendMail({
+          from: `"Briefly News" <${process.env.EMAIL_USER}>`,
+          to: user.email,
+          subject: 'Your Daily Briefly',
+          html: emailBody,
+        });
+        console.log(`✅ Sent to ${user.email}`);
+      } catch (err) {
+        console.error(`❌ Failed to send to ${user.email}:`, err.message);
+      }
     }
   }
 }
