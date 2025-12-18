@@ -1,6 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const Parser = require('rss-parser');
 const nodemailer = require('nodemailer');
+const cheerio = require('cheerio'); // MUST BE INSTALLED
 
 // 1. Setup Database
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -20,90 +21,148 @@ const parser = new Parser({
       ['media:content', 'media'],
       ['enclosure', 'enclosure'],
       ['content:encoded', 'contentEncoded'],
+      ['content', 'content'],
+      ['description', 'description'],
     ],
   },
 });
 
-// 3. Fallback Images by Category
-const FALLBACK_IMAGES = {
-  technology: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=600&q=80',
-  finance:    'https://images.unsplash.com/photo-1611974765270-ca1258634369?auto=format&fit=crop&w=600&q=80',
-  crypto:     'https://images.unsplash.com/photo-1518546305927-5a555bb7020d?auto=format&fit=crop&w=600&q=80',
-  sports:     'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=600&q=80',
-  ai:         'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=600&q=80',
-  business:   'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=600&q=80',
-  entertainment: 'https://images.unsplash.com/photo-1603190287605-e6ade32fa852?auto=format&fit=crop&w=600&q=80',
-  health:     'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=600&q=80',
-  science:    'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=600&q=80',
-  gaming:     'https://images.unsplash.com/photo-1552820728-8b83bb6d773f?auto=format&fit=crop&w=600&q=80',
-  world:      'https://images.unsplash.com/photo-1521295121783-8a321d551ad2?auto=format&fit=crop&w=600&q=80',
-  politics:   'https://images.unsplash.com/photo-1555848962-6e79363ec58f?auto=format&fit=crop&w=600&q=80',
-  default:    'https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=600&q=80'
-};
-
-const CATEGORY_STYLES = {
-  technology: { color: '#3B82F6', emoji: '💻' },
-  finance:    { color: '#10B981', emoji: '💰' },
-  crypto:     { color: '#F59E0B', emoji: '🪙' },
-  sports:     { color: '#EF4444', emoji: '⚽' },
-  ai:         { color: '#8B5CF6', emoji: '🤖' },
-  business:   { color: '#6366F1', emoji: '👔' },
-  entertainment: { color: '#EC4899', emoji: '🎬' },
-  health:     { color: '#14B8A6', emoji: '🏥' },
-  science:    { color: '#06B6D4', emoji: '🧬' },
-  gaming:     { color: '#A855F7', emoji: '🎮' },
-  world:      { color: '#64748B', emoji: '🌍' },
-  politics:   { color: '#F43F5E', emoji: '⚖️' },
-  default:    { color: '#6B7280', emoji: '📰' }
-};
-
+// --- THE 50+ CATEGORY MEGA LIST ---
 const FEEDS = {
+  // TECH & FUTURE
   technology: 'http://feeds.bbci.co.uk/news/technology/rss.xml',
-  finance: 'https://feeds.content.dowjones.com/public/rss/mw_topstories',
-  crypto: 'https://cointelegraph.com/rss',
-  sports: 'https://www.espn.com/espn/rss/news',
   ai: 'https://www.sciencedaily.com/rss/computers_math/artificial_intelligence.xml',
-  business: 'http://feeds.bbci.co.uk/news/business/rss.xml',
-  entertainment: 'https://www.eonline.com/syndication/feeds/rssfeeds/topstories.xml',
-  health: 'http://feeds.bbci.co.uk/news/health/rss.xml',
+  cybersecurity: 'https://feeds.feedburner.com/TheHackersNews',
+  coding: 'https://dev.to/feed',
+  startups: 'https://techcrunch.com/category/startups/feed/',
+  space: 'https://www.space.com/feeds/news',
   science: 'https://www.sciencedaily.com/rss/top/science.xml',
-  gaming: 'https://www.gamespot.com/feeds/news/',
+  biotech: 'https://www.fiercebiotech.com/rss/xml',
+  energy: 'https://oilprice.com/rss/main',
+  ev: 'https://electrek.co/feed/',
+
+  // FINANCE & BIZ
+  finance: 'https://feeds.content.dowjones.com/public/rss/mw_topstories',
+  business: 'http://feeds.bbci.co.uk/news/business/rss.xml',
+  crypto: 'https://cointelegraph.com/rss',
+  markets: 'https://www.cnbc.com/id/10000664/device/rss/rss.html',
+  economics: 'https://www.economist.com/finance-and-economics/rss.xml',
+  marketing: 'https://marketingland.com/feed',
+  realestate: 'https://www.inman.com/feed/',
+
+  // WORLD & POLITICS
   world: 'http://feeds.bbci.co.uk/news/world/rss.xml',
-  politics: 'http://feeds.bbci.co.uk/news/politics/rss.xml'
+  politics: 'https://www.politico.com/rss/politicopicks.xml',
+  us_news: 'http://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml',
+  uk_news: 'http://feeds.bbci.co.uk/news/uk/rss.xml',
+  europe: 'https://www.euronews.com/rss?format=xml&level=theme&id=news',
+  asia: 'http://feeds.bbci.co.uk/news/world/asia/rss.xml',
+
+  // SPORTS
+  sports: 'https://www.espn.com/espn/rss/news',
+  soccer: 'https://www.goal.com/en/feeds/news',
+  nba: 'https://www.nba.com/rss/nba_rss.xml',
+  nfl: 'https://www.nfl.com/rss/rsslanding?searchString=home',
+  f1: 'https://www.autosport.com/rss/feed/f1',
+  tennis: 'https://www.tennis.com/rss',
+  golf: 'https://www.golfchannel.com/rss/news',
+
+  // ENTERTAINMENT
+  entertainment: 'https://www.eonline.com/syndication/feeds/rssfeeds/topstories.xml',
+  movies: 'https://www.cinemablend.com/rss/news',
+  music: 'https://www.nme.com/feed',
+  gaming: 'https://www.gamespot.com/feeds/news/',
+  anime: 'https://www.animenewsnetwork.com/news/rss.xml',
+  books: 'https://www.theguardian.com/books/rss',
+  art: 'https://news.artnet.com/feed',
+
+  // LIFESTYLE
+  health: 'http://feeds.bbci.co.uk/news/health/rss.xml',
+  fitness: 'https://www.muscleandfitness.com/feed/',
+  food: 'https://www.bonappetit.com/feed/latest/rss',
+  travel: 'https://www.travelandleisure.com/feed/sc/feed',
+  fashion: 'https://www.vogue.com/feed/rss',
+  design: 'https://www.dezeen.com/feed',
+  architecture: 'https://www.archdaily.com/feed/rss/',
+  cars: 'https://www.autocar.co.uk/rss',
+  photography: 'https://petapixel.com/feed/',
+
+  // INTELLECTUAL
+  history: 'https://www.history.com/.rss/full/history',
+  psychology: 'https://www.psychologytoday.com/us/feed',
+  philosophy: 'https://dailynous.com/feed/',
+  productivity: 'https://lifehacker.com/rss'
 };
 
-// SMART IMAGE EXTRACTOR
-function extractImage(item, category) {
-  // 1. Try Standard RSS fields
+// --- VIBRANT COLORS FOR EVERY CATEGORY ---
+const CATEGORY_STYLES = {
+  // Defaults
+  default: { color: '#6B7280', emoji: '📰' },
+
+  // Tech Group
+  technology: { color: '#2563EB', emoji: '💻' },
+  ai: { color: '#7C3AED', emoji: '🤖' },
+  cybersecurity: { color: '#DC2626', emoji: '🔒' },
+  coding: { color: '#10B981', emoji: '👨‍💻' },
+  startups: { color: '#F59E0B', emoji: '🚀' },
+  space: { color: '#4B5563', emoji: '🪐' },
+
+  // Finance Group
+  finance: { color: '#059669', emoji: '💵' },
+  crypto: { color: '#F59E0B', emoji: '🪙' },
+  markets: { color: '#047857', emoji: '📈' },
+
+  // Sports Group
+  sports: { color: '#EF4444', emoji: '🏆' },
+  soccer: { color: '#10B981', emoji: '⚽' },
+  nba: { color: '#EA580C', emoji: '🏀' },
+  nfl: { color: '#991B1B', emoji: '🏈' },
+  f1: { color: '#DC2626', emoji: '🏎️' },
+
+  // Lifestyle Group
+  gaming: { color: '#8B5CF6', emoji: '🎮' },
+  music: { color: '#EC4899', emoji: '🎵' },
+  movies: { color: '#DB2777', emoji: '🎬' },
+  food: { color: '#F97316', emoji: '🍔' },
+  travel: { color: '#0EA5E9', emoji: '✈️' },
+  fashion: { color: '#D946EF', emoji: '👗' },
+};
+
+// --- THE SMART IMAGE FINDER ---
+function findImage(item) {
+  // 1. Check standard RSS enclosures
   if (item.enclosure && item.enclosure.url) return item.enclosure.url;
   if (item.media && item.media.$ && item.media.$.url) return item.media.$.url;
-  if (item.media && item.media['@_url']) return item.media['@_url'];
 
-  // 2. Try to regex an <img> tag out of the content
-  const htmlContent = item.contentEncoded || item.content || item.description || '';
-  const imgMatch = htmlContent.match(/<img[^>]+src="([^">]+)"/);
-  if (imgMatch && imgMatch[1]) {
-    return imgMatch[1];
+  // 2. Deep Search with Cheerio (Parses the HTML content)
+  const html = item.contentEncoded || item.content || item.description || '';
+  if (html) {
+    const $ = cheerio.load(html);
+    const imgUrl = $('img').first().attr('src');
+    if (imgUrl) return imgUrl;
   }
 
-  // 3. Fallback to Relevant Category Image
-  return FALLBACK_IMAGES[category] || FALLBACK_IMAGES.default;
+  return null; // Return null so we can handle fallback in the loop
 }
 
 async function run() {
-  console.log("🚀 Starting Daily Brief (With Relevant Images)...");
+  console.log("🚀 Starting SUPER Daily Brief...");
 
   const { data: subscribers, error } = await supabase.from('subscribers').select('*');
   if (error) { console.error(error); process.exit(1); }
 
   const newsCache = {};
 
-  // Fetch News
+  // Fetch News (Only fetch what is needed to save time, or fetch all?)
+  // For a cron job, we fetch all.
   for (const [category, url] of Object.entries(FEEDS)) {
     try {
       const feed = await parser.parseURL(url);
       newsCache[category] = feed.items.slice(0, 3);
-    } catch (e) { newsCache[category] = []; }
+    } catch (e) {
+      // console.error(`Failed to fetch ${category}`);
+      newsCache[category] = [];
+    }
   }
 
   for (const user of subscribers) {
@@ -117,71 +176,69 @@ async function run() {
           const style = CATEGORY_STYLES[interest] || CATEGORY_STYLES.default;
 
           emailContent += `
-            <div style="margin-top: 30px; margin-bottom: 15px; border-bottom: 2px solid ${style.color}; padding-bottom: 5px;">
-              <h2 style="color: ${style.color}; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 20px; text-transform: uppercase; margin: 0;">
+            <div style="margin: 30px 0 15px 0;">
+              <span style="background-color: ${style.color}; color: #fff; padding: 4px 12px; border-radius: 100px; font-size: 12px; font-weight: 700; text-transform: uppercase; font-family: Helvetica, Arial, sans-serif;">
                 ${style.emoji} ${interest}
-              </h2>
+              </span>
             </div>
           `;
 
           newsCache[interest].forEach(item => {
-            const imageUrl = extractImage(item, interest);
+            const imageUrl = findImage(item);
 
-            emailContent += `
-              <a href="${item.link}" style="text-decoration: none; color: inherit;">
-                <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-                  <div style="height: 180px; background-image: url('${imageUrl}'); background-size: cover; background-position: center;"></div>
-                  <div style="padding: 15px;">
-                    <h3 style="margin: 0 0 10px 0; color: #111827; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 18px; line-height: 1.4;">
-                      ${item.title}
-                    </h3>
-                    <p style="margin: 0; color: #6B7280; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.5;">
-                      Read full story →
-                    </p>
+            // LOGIC: If no image, we show a smaller "Text Only" card to avoid ugly placeholders
+            let cardHtml = '';
+
+            if (imageUrl) {
+               // BEAUTIFUL CARD WITH IMAGE
+               cardHtml = `
+                <a href="${item.link}" style="text-decoration: none; color: inherit; display: block; margin-bottom: 20px;">
+                  <div style="background: #ffffff; border: 1px solid #E5E7EB; border-radius: 12px; overflow: hidden; transition: transform 0.2s;">
+                    <div style="height: 200px; width: 100%; background-image: url('${imageUrl}'); background-size: cover; background-position: center;"></div>
+                    <div style="padding: 20px;">
+                      <h3 style="margin: 0 0 8px 0; color: #111827; font-size: 18px; line-height: 1.4; font-weight: 700; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">${item.title}</h3>
+                      <p style="margin: 0; color: #6B7280; font-size: 14px; line-height: 1.6;">Click to read full story &rarr;</p>
+                    </div>
                   </div>
-                </div>
-              </a>
-            `;
+                </a>
+               `;
+            } else {
+               // SLEEK CARD NO IMAGE (Better than a broken placeholder)
+               cardHtml = `
+                <a href="${item.link}" style="text-decoration: none; color: inherit; display: block; margin-bottom: 15px;">
+                  <div style="background: #F9FAFB; border-left: 4px solid ${style.color}; border-radius: 8px; padding: 16px;">
+                    <h3 style="margin: 0; color: #1F2937; font-size: 16px; line-height: 1.4; font-weight: 600; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">${item.title}</h3>
+                    <p style="margin: 6px 0 0 0; color: #6B7280; font-size: 12px;">Read more &rarr;</p>
+                  </div>
+                </a>
+               `;
+            }
+            emailContent += cardHtml;
           });
         }
       }
     }
 
+    // MODERN EMAIL TEMPLATE
     const fullHtml = `
       <!DOCTYPE html>
       <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      </head>
-      <body style="margin: 0; padding: 0; background-color: #f3f4f6; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f3f4f6; padding: 20px 0;">
-          <tr>
-            <td align="center">
-              <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
-                <tr>
-                  <td style="background: linear-gradient(135deg, #111827 0%, #374151 100%); padding: 40px 30px; text-align: center;">
-                    <h1 style="color: #ffffff; margin: 0; font-size: 32px; letter-spacing: -1px; font-weight: 800;">Briefly.</h1>
-                    <p style="color: #D1D5DB; margin: 8px 0 0 0; font-size: 16px; font-weight: 300;">Your Curated Daily Digest</p>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 30px;">
-                    ${emailContent}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="background-color: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
-                    <p style="margin: 0; color: #9CA3AF; font-size: 12px;">
-                      © 2024 Briefly News.
-                    </p>
-                  </td>
-                </tr>
-              </table>
-              <div style="height: 40px;"></div>
-            </td>
-          </tr>
-        </table>
+      <body style="margin: 0; padding: 0; background-color: #F3F4F6; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding-bottom: 40px;">
+          
+          <div style="background-color: #000000; padding: 40px 30px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 40px; font-weight: 800; letter-spacing: -2px;">Briefly.</h1>
+            <p style="color: #9CA3AF; margin: 10px 0 0 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">The World's Best Daily Digest</p>
+          </div>
+
+          <div style="padding: 10px 30px;">
+            ${emailContent}
+          </div>
+
+          <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+            <p style="color: #9CA3AF; font-size: 12px;">© 2024 Briefly Inc. <br> Powered by Supabase & GitHub</p>
+          </div>
+        </div>
       </body>
       </html>
     `;
@@ -191,7 +248,7 @@ async function run() {
         await transporter.sendMail({
           from: `"Briefly News" <${process.env.EMAIL_USER}>`,
           to: user.email,
-          subject: 'Your Daily Briefly 🚀',
+          subject: 'Your Daily Digest ⚡️',
           html: fullHtml,
         });
         console.log(`✅ Sent to ${user.email}`);
