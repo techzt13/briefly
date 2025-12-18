@@ -12,8 +12,7 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: '18'
-      # ADD CHEERIO HERE
-      - run: npm install @supabase/supabase-js rss-parser nodemailer cheerio
+      - run: npm install @supabase/supabase-js rss-parser nodemailer
       - run: node scripts/daily_email.js
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
