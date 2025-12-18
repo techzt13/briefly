@@ -1,7 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
 const Parser = require('rss-parser');
 const nodemailer = require('nodemailer');
-const cheerio = require('cheerio'); // You might need to install this, or use regex. Let's use Regex to keep it dependency-free for now.
 
 // 1. Setup Database
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -25,8 +24,7 @@ const parser = new Parser({
   },
 });
 
-// 3. Fallback Images by Category (High Quality Unsplash IDs)
-// If the news source gives us NOTHING, we use these so it still looks relevant.
+// 3. Fallback Images by Category
 const FALLBACK_IMAGES = {
   technology: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=600&q=80',
   finance:    'https://images.unsplash.com/photo-1611974765270-ca1258634369?auto=format&fit=crop&w=600&q=80',
@@ -79,9 +77,9 @@ function extractImage(item, category) {
   // 1. Try Standard RSS fields
   if (item.enclosure && item.enclosure.url) return item.enclosure.url;
   if (item.media && item.media.$ && item.media.$.url) return item.media.$.url;
-  if (item.media && item.media['@_url']) return item.media['@_url']; // Some feeds use this
+  if (item.media && item.media['@_url']) return item.media['@_url'];
 
-  // 2. Try to regex an <img> tag out of the content/description
+  // 2. Try to regex an <img> tag out of the content
   const htmlContent = item.contentEncoded || item.content || item.description || '';
   const imgMatch = htmlContent.match(/<img[^>]+src="([^">]+)"/);
   if (imgMatch && imgMatch[1]) {
@@ -127,7 +125,6 @@ async function run() {
           `;
 
           newsCache[interest].forEach(item => {
-            // PASS THE CATEGORY SO THE FALLBACK IS RELEVANT
             const imageUrl = extractImage(item, interest);
 
             emailContent += `
@@ -162,20 +159,17 @@ async function run() {
           <tr>
             <td align="center">
               <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
-
                 <tr>
                   <td style="background: linear-gradient(135deg, #111827 0%, #374151 100%); padding: 40px 30px; text-align: center;">
                     <h1 style="color: #ffffff; margin: 0; font-size: 32px; letter-spacing: -1px; font-weight: 800;">Briefly.</h1>
                     <p style="color: #D1D5DB; margin: 8px 0 0 0; font-size: 16px; font-weight: 300;">Your Curated Daily Digest</p>
                   </td>
                 </tr>
-
                 <tr>
                   <td style="padding: 30px;">
                     ${emailContent}
                   </td>
                 </tr>
-
                 <tr>
                   <td style="background-color: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
                     <p style="margin: 0; color: #9CA3AF; font-size: 12px;">
