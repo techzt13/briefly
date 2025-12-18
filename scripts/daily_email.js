@@ -1,6 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const Parser = require('rss-parser');
 const nodemailer = require('nodemailer');
+const cheerio = require('cheerio'); // You might need to install this, or use regex. Let's use Regex to keep it dependency-free for now.
 
 // 1. Setup Database
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -14,31 +15,48 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Custom parser to try and get images
 const parser = new Parser({
   customFields: {
     item: [
       ['media:content', 'media'],
       ['enclosure', 'enclosure'],
+      ['content:encoded', 'contentEncoded'],
     ],
   },
 });
 
-// 3. Vibrant Color Palette & Icons
+// 3. Fallback Images by Category (High Quality Unsplash IDs)
+// If the news source gives us NOTHING, we use these so it still looks relevant.
+const FALLBACK_IMAGES = {
+  technology: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=600&q=80',
+  finance:    'https://images.unsplash.com/photo-1611974765270-ca1258634369?auto=format&fit=crop&w=600&q=80',
+  crypto:     'https://images.unsplash.com/photo-1518546305927-5a555bb7020d?auto=format&fit=crop&w=600&q=80',
+  sports:     'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?auto=format&fit=crop&w=600&q=80',
+  ai:         'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=600&q=80',
+  business:   'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=600&q=80',
+  entertainment: 'https://images.unsplash.com/photo-1603190287605-e6ade32fa852?auto=format&fit=crop&w=600&q=80',
+  health:     'https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=600&q=80',
+  science:    'https://images.unsplash.com/photo-1532094349884-543bc11b234d?auto=format&fit=crop&w=600&q=80',
+  gaming:     'https://images.unsplash.com/photo-1552820728-8b83bb6d773f?auto=format&fit=crop&w=600&q=80',
+  world:      'https://images.unsplash.com/photo-1521295121783-8a321d551ad2?auto=format&fit=crop&w=600&q=80',
+  politics:   'https://images.unsplash.com/photo-1555848962-6e79363ec58f?auto=format&fit=crop&w=600&q=80',
+  default:    'https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=600&q=80'
+};
+
 const CATEGORY_STYLES = {
-  technology: { color: '#3B82F6', emoji: '💻' }, // Blue
-  finance:    { color: '#10B981', emoji: '💰' }, // Green
-  crypto:     { color: '#F59E0B', emoji: '🪙' }, // Gold
-  sports:     { color: '#EF4444', emoji: '⚽' }, // Red
-  ai:         { color: '#8B5CF6', emoji: '🤖' }, // Purple
-  business:   { color: '#6366F1', emoji: '👔' }, // Indigo
-  entertainment: { color: '#EC4899', emoji: '🎬' }, // Pink
-  health:     { color: '#14B8A6', emoji: '🏥' }, // Teal
-  science:    { color: '#06B6D4', emoji: '🧬' }, // Cyan
-  gaming:     { color: '#A855F7', emoji: '🎮' }, // Violet
-  world:      { color: '#64748B', emoji: '🌍' }, // Slate
-  politics:   { color: '#F43F5E', emoji: '⚖️' }, // Rose
-  default:    { color: '#6B7280', emoji: '📰' }  // Gray
+  technology: { color: '#3B82F6', emoji: '💻' },
+  finance:    { color: '#10B981', emoji: '💰' },
+  crypto:     { color: '#F59E0B', emoji: '🪙' },
+  sports:     { color: '#EF4444', emoji: '⚽' },
+  ai:         { color: '#8B5CF6', emoji: '🤖' },
+  business:   { color: '#6366F1', emoji: '👔' },
+  entertainment: { color: '#EC4899', emoji: '🎬' },
+  health:     { color: '#14B8A6', emoji: '🏥' },
+  science:    { color: '#06B6D4', emoji: '🧬' },
+  gaming:     { color: '#A855F7', emoji: '🎮' },
+  world:      { color: '#64748B', emoji: '🌍' },
+  politics:   { color: '#F43F5E', emoji: '⚖️' },
+  default:    { color: '#6B7280', emoji: '📰' }
 };
 
 const FEEDS = {
@@ -56,16 +74,26 @@ const FEEDS = {
   politics: 'http://feeds.bbci.co.uk/news/politics/rss.xml'
 };
 
-// Helper to find an image in the RSS feed
-function extractImage(item) {
+// SMART IMAGE EXTRACTOR
+function extractImage(item, category) {
+  // 1. Try Standard RSS fields
   if (item.enclosure && item.enclosure.url) return item.enclosure.url;
   if (item.media && item.media.$ && item.media.$.url) return item.media.$.url;
-  // Fallback image if none found
-  return 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=600&q=80';
+  if (item.media && item.media['@_url']) return item.media['@_url']; // Some feeds use this
+
+  // 2. Try to regex an <img> tag out of the content/description
+  const htmlContent = item.contentEncoded || item.content || item.description || '';
+  const imgMatch = htmlContent.match(/<img[^>]+src="([^">]+)"/);
+  if (imgMatch && imgMatch[1]) {
+    return imgMatch[1];
+  }
+
+  // 3. Fallback to Relevant Category Image
+  return FALLBACK_IMAGES[category] || FALLBACK_IMAGES.default;
 }
 
 async function run() {
-  console.log("🚀 Starting Daily Brief (Pro Design)...");
+  console.log("🚀 Starting Daily Brief (With Relevant Images)...");
 
   const { data: subscribers, error } = await supabase.from('subscribers').select('*');
   if (error) { console.error(error); process.exit(1); }
@@ -76,11 +104,10 @@ async function run() {
   for (const [category, url] of Object.entries(FEEDS)) {
     try {
       const feed = await parser.parseURL(url);
-      newsCache[category] = feed.items.slice(0, 3); // Top 3 stories per category
+      newsCache[category] = feed.items.slice(0, 3);
     } catch (e) { newsCache[category] = []; }
   }
 
-  // Send Emails
   for (const user of subscribers) {
     let emailContent = '';
     let hasContent = false;
@@ -91,7 +118,6 @@ async function run() {
           hasContent = true;
           const style = CATEGORY_STYLES[interest] || CATEGORY_STYLES.default;
 
-          // CATEGORY HEADER
           emailContent += `
             <div style="margin-top: 30px; margin-bottom: 15px; border-bottom: 2px solid ${style.color}; padding-bottom: 5px;">
               <h2 style="color: ${style.color}; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 20px; text-transform: uppercase; margin: 0;">
@@ -100,20 +126,20 @@ async function run() {
             </div>
           `;
 
-          // ARTICLES (Cards)
           newsCache[interest].forEach(item => {
-            const imageUrl = extractImage(item);
+            // PASS THE CATEGORY SO THE FALLBACK IS RELEVANT
+            const imageUrl = extractImage(item, interest);
+
             emailContent += `
               <a href="${item.link}" style="text-decoration: none; color: inherit;">
                 <div style="background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-                  <div style="height: 160px; background-image: url('${imageUrl}'); background-size: cover; background-position: center;"></div>
-
+                  <div style="height: 180px; background-image: url('${imageUrl}'); background-size: cover; background-position: center;"></div>
                   <div style="padding: 15px;">
                     <h3 style="margin: 0 0 10px 0; color: #111827; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 18px; line-height: 1.4;">
                       ${item.title}
                     </h3>
                     <p style="margin: 0; color: #6B7280; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.5;">
-                      Click to read more →
+                      Read full story →
                     </p>
                   </div>
                 </div>
@@ -124,7 +150,6 @@ async function run() {
       }
     }
 
-    // THE FULL HTML TEMPLATE
     const fullHtml = `
       <!DOCTYPE html>
       <html>
@@ -139,9 +164,9 @@ async function run() {
               <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
 
                 <tr>
-                  <td style="background-color: #111827; padding: 40px 30px; text-align: center;">
-                    <h1 style="color: #ffffff; margin: 0; font-size: 28px; letter-spacing: -0.5px;">Briefly.</h1>
-                    <p style="color: #9CA3AF; margin: 10px 0 0 0; font-size: 14px;">Your Curated Daily Digest</p>
+                  <td style="background: linear-gradient(135deg, #111827 0%, #374151 100%); padding: 40px 30px; text-align: center;">
+                    <h1 style="color: #ffffff; margin: 0; font-size: 32px; letter-spacing: -1px; font-weight: 800;">Briefly.</h1>
+                    <p style="color: #D1D5DB; margin: 8px 0 0 0; font-size: 16px; font-weight: 300;">Your Curated Daily Digest</p>
                   </td>
                 </tr>
 
@@ -154,13 +179,11 @@ async function run() {
                 <tr>
                   <td style="background-color: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
                     <p style="margin: 0; color: #9CA3AF; font-size: 12px;">
-                      You received this because you are awesome. <br>
-                      © 2024 Briefly News. All rights reserved.
+                      © 2024 Briefly News.
                     </p>
                   </td>
                 </tr>
               </table>
-
               <div style="height: 40px;"></div>
             </td>
           </tr>
@@ -174,7 +197,7 @@ async function run() {
         await transporter.sendMail({
           from: `"Briefly News" <${process.env.EMAIL_USER}>`,
           to: user.email,
-          subject: 'Your Daily Briefly 🚀', // Added rocket emoji
+          subject: 'Your Daily Briefly 🚀',
           html: fullHtml,
         });
         console.log(`✅ Sent to ${user.email}`);
