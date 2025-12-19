@@ -3,53 +3,72 @@
 import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// --- CONFIGURATION ---
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// The exact keys from your backend script, organized for the UI
+// --- SYNCED WITH BACKEND ---
 const CATEGORY_GROUPS = [
   {
-    title: "Technology",
+    title: "🌍 World & Politics",
     items: [
-      { id: 'tech_general', label: 'Tech News' },
-      { id: 'tech_ai', label: 'Artificial Intelligence' },
-      { id: 'tech_coding', label: 'Coding & Dev' },
-      { id: 'tech_mobile', label: 'Mobile' },
-      { id: 'tech_gadgets', label: 'Gadgets' },
+      { id: 'world_general', label: 'World News' },
+      { id: 'world_us', label: 'U.S. News' },
+      { id: 'politics_general', label: 'Politics' },
     ]
   },
   {
-    title: "Finance & Crypto",
+    title: "💼 Business & Finance",
     items: [
-      { id: 'finance_markets', label: 'Stock Markets' },
+      { id: 'business_general', label: 'Business' },
+      { id: 'finance_markets', label: 'Markets' },
       { id: 'finance_vc', label: 'Venture Capital' },
+    ]
+  },
+  {
+    title: "₿ Crypto",
+    items: [
+      { id: 'crypto_general', label: 'Crypto News' },
       { id: 'crypto_bitcoin', label: 'Bitcoin' },
       { id: 'crypto_ethereum', label: 'Ethereum' },
-      { id: 'crypto_general', label: 'Crypto News' },
     ]
   },
   {
-    title: "Sports",
+    title: "💻 Technology & AI",
+    items: [
+      { id: 'tech_general', label: 'Tech News' },
+      { id: 'tech_ai', label: 'AI & Future' },
+      { id: 'tech_coding', label: 'Coding' },
+      { id: 'tech_mobile', label: 'Mobile' },
+    ]
+  },
+  {
+    title: "⚽ Sports",
     items: [
       { id: 'sports_general', label: 'Top Sports' },
       { id: 'sports_soccer', label: 'Soccer' },
       { id: 'sports_nba', label: 'NBA' },
       { id: 'sports_nfl', label: 'NFL' },
-      { id: 'sports_f1', label: 'F1 Racing' },
+      { id: 'sports_f1', label: 'F1' },
       { id: 'sports_tennis', label: 'Tennis' },
-      { id: 'sports_golf', label: 'Golf' },
     ]
   },
   {
-    title: "Science & Life",
+    title: "🔬 Science & Health",
     items: [
+      { id: 'health_general', label: 'Health' },
+      { id: 'science_general', label: 'Science' },
       { id: 'science_space', label: 'Space' },
-      { id: 'science_neuroscience', label: 'Neuroscience' },
+    ]
+  },
+  {
+    title: "🎬 Lifestyle & Entertainment",
+    items: [
+      { id: 'entertainment_general', label: 'Entertainment' },
       { id: 'life_gaming', label: 'Gaming' },
       { id: 'life_movies', label: 'Movies' },
+      { id: 'life_travel', label: 'Travel' },
       { id: 'life_cars', label: 'Cars' },
     ]
   }
@@ -112,11 +131,11 @@ export default function Home() {
       {/* Header */}
       <div className="text-center mb-12">
         <h1 className="text-6xl font-extrabold tracking-tighter text-black mb-4">Briefly.</h1>
-        <p className="text-xl text-gray-500 font-medium">Build your perfect daily digest.</p>
+        <p className="text-xl text-gray-500 font-medium">Your personalized daily digest.</p>
       </div>
 
       {/* Card */}
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
+      <div className="w-full max-w-3xl bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
 
         {status === 'success' ? (
           <div className="text-center py-16">
@@ -154,7 +173,7 @@ export default function Home() {
                 2. Choose your mix
               </label>
 
-              <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {CATEGORY_GROUPS.map((group) => (
                   <div key={group.title}>
                     <h3 className="text-xs font-bold text-gray-400 uppercase mb-3 ml-1">{group.title}</h3>
@@ -165,9 +184,9 @@ export default function Home() {
                           type="button"
                           onClick={() => toggleCategory(cat.id)}
                           className={`
-                            px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 border
+                            px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 border
                             ${selected.includes(cat.id)
-                              ? 'bg-black text-white border-black scale-105 shadow-md'
+                              ? 'bg-black text-white border-black shadow-md'
                               : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:bg-gray-50'
                             }
                           `}

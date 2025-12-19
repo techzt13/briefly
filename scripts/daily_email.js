@@ -21,75 +21,93 @@ const parser = new Parser({
   },
 });
 
-// --- GRANULAR CATEGORIES (Sub-Niched) ---
+// --- MASTER FEED LIST (Synced with Frontend) ---
 const FEEDS = {
-  // --- TECH ---
-  tech_general: 'http://feeds.bbci.co.uk/news/technology/rss.xml',
-  tech_ai: 'https://www.sciencedaily.com/rss/computers_math/artificial_intelligence.xml',
-  tech_coding: 'https://dev.to/feed',
-  tech_mobile: 'https://www.gsmarena.com/rss-news-reviews.php3',
-  tech_gadgets: 'https://www.theverge.com/rss/index.xml',
+  // 🌍 WORLD & POLITICS
+  world_general: 'http://feeds.bbci.co.uk/news/world/rss.xml',
+  politics_general: 'https://www.politico.com/rss/politicopicks.xml',
+  world_us: 'http://feeds.bbci.co.uk/news/world/us_and_canada/rss.xml',
 
-  // --- CRYPTO & FINANCE ---
+  // 💼 BUSINESS & FINANCE
+  business_general: 'http://feeds.bbci.co.uk/news/business/rss.xml',
   finance_markets: 'https://feeds.content.dowjones.com/public/rss/mw_topstories',
   finance_vc: 'https://techcrunch.com/category/venture/feed/',
+
+  // ₿ CRYPTO
   crypto_general: 'https://cointelegraph.com/rss',
   crypto_bitcoin: 'https://news.bitcoin.com/feed/',
   crypto_ethereum: 'https://weekinethereumnews.com/rss/',
 
-  // --- SPORTS ---
+  // 💻 TECH & AI
+  tech_general: 'http://feeds.bbci.co.uk/news/technology/rss.xml',
+  tech_ai: 'https://www.sciencedaily.com/rss/computers_math/artificial_intelligence.xml',
+  tech_coding: 'https://dev.to/feed',
+  tech_mobile: 'https://www.gsmarena.com/rss-news-reviews.php3',
+
+  // ⚽ SPORTS
   sports_general: 'https://www.espn.com/espn/rss/news',
   sports_soccer: 'https://www.goal.com/en/feeds/news',
-  sports_tennis: 'https://www.tennis.com/rss',
-  sports_nfl: 'https://www.nfl.com/rss/rsslanding?searchString=home',
   sports_nba: 'https://www.nba.com/rss/nba_rss.xml',
+  sports_nfl: 'https://www.nfl.com/rss/rsslanding?searchString=home',
   sports_f1: 'https://www.autosport.com/rss/feed/f1',
-  sports_golf: 'https://www.golfchannel.com/rss/news',
+  sports_tennis: 'https://www.tennis.com/rss',
 
-  // --- SCIENCE ---
+  // 🔬 SCIENCE & HEALTH
   science_space: 'https://www.space.com/feeds/news',
-  science_neuroscience: 'https://www.sciencedaily.com/rss/mind_brain/neuroscience.xml',
-  science_environment: 'http://feeds.bbci.co.uk/news/science_and_environment/rss.xml',
+  science_general: 'https://www.sciencedaily.com/rss/top/science.xml',
+  health_general: 'http://feeds.bbci.co.uk/news/health/rss.xml',
 
-  // --- LIFESTYLE ---
+  // 🎬 LIFESTYLE & ENTERTAINMENT
+  entertainment_general: 'https://www.eonline.com/syndication/feeds/rssfeeds/topstories.xml',
   life_gaming: 'https://www.gamespot.com/feeds/news/',
   life_movies: 'https://www.cinemablend.com/rss/news',
   life_travel: 'https://www.travelandleisure.com/feed/sc/feed',
   life_cars: 'https://www.autocar.co.uk/rss',
 };
 
-// --- STYLES FOR SUB-CATEGORIES ---
+// --- STYLES ---
 const CATEGORY_STYLES = {
   default: { color: '#6B7280', emoji: '📰' },
+
+  // World
+  world_general: { color: '#4B5563', emoji: '🌍' },
+  world_us: { color: '#4B5563', emoji: '🇺🇸' },
+  politics_general: { color: '#E11D48', emoji: '⚖️' },
+
+  // Business
+  business_general: { color: '#0F172A', emoji: '💼' },
+  finance_markets: { color: '#059669', emoji: '📈' },
+  finance_vc: { color: '#059669', emoji: '💰' },
+
+  // Crypto
+  crypto_general: { color: '#F59E0B', emoji: '🪙' },
+  crypto_bitcoin: { color: '#F7931A', emoji: '₿' },
+  crypto_ethereum: { color: '#3C3C3D', emoji: 'Ξ' },
 
   // Tech
   tech_general: { color: '#2563EB', emoji: '💻' },
   tech_ai: { color: '#7C3AED', emoji: '🤖' },
   tech_coding: { color: '#10B981', emoji: '👨‍💻' },
   tech_mobile: { color: '#3B82F6', emoji: '📱' },
-  tech_gadgets: { color: '#6366F1', emoji: '⌚' },
-
-  // Finance/Crypto
-  finance_markets: { color: '#059669', emoji: '📈' },
-  finance_vc: { color: '#059669', emoji: '💰' },
-  crypto_general: { color: '#F59E0B', emoji: '🪙' },
-  crypto_bitcoin: { color: '#F7931A', emoji: '₿' }, // Bitcoin Orange
-  crypto_ethereum: { color: '#3C3C3D', emoji: 'Ξ' }, // Eth symbol
 
   // Sports
   sports_general: { color: '#EF4444', emoji: '🏆' },
   sports_soccer: { color: '#10B981', emoji: '⚽' },
-  sports_tennis: { color: '#84CC16', emoji: '🎾' },
-  sports_nfl: { color: '#991B1B', emoji: '🏈' },
   sports_nba: { color: '#EA580C', emoji: '🏀' },
+  sports_nfl: { color: '#991B1B', emoji: '🏈' },
   sports_f1: { color: '#DC2626', emoji: '🏎️' },
-  sports_golf: { color: '#15803D', emoji: '⛳' },
+  sports_tennis: { color: '#84CC16', emoji: '🎾' },
 
-  // Science/Life
+  // Science/Health
   science_space: { color: '#4B5563', emoji: '🪐' },
-  science_neuroscience: { color: '#DB2777', emoji: '🧠' },
+  science_general: { color: '#0EA5E9', emoji: '🔬' },
+  health_general: { color: '#BE123C', emoji: '❤️' },
+
+  // Life
+  entertainment_general: { color: '#DB2777', emoji: '🎬' },
   life_gaming: { color: '#8B5CF6', emoji: '🎮' },
-  life_movies: { color: '#BE185D', emoji: '🎬' },
+  life_movies: { color: '#BE185D', emoji: '🍿' },
+  life_travel: { color: '#0EA5E9', emoji: '✈️' },
   life_cars: { color: '#B91C1C', emoji: '🚗' },
 };
 
@@ -112,7 +130,7 @@ function generateDailyNote(newsCache) {
 
   for (const [cat, items] of Object.entries(newsCache)) {
     if (items && items.length > 0) {
-      topCategory = cat.replace('_', ' '); // Turn "tech_ai" into "tech ai"
+      topCategory = cat.replace('_', ' ');
       topStoryTitle = items[0].title;
       break;
     }
@@ -124,7 +142,7 @@ function generateDailyNote(newsCache) {
 }
 
 async function run() {
-  console.log("🚀 Starting Granular Daily Brief...");
+  console.log("🚀 Starting Master Daily Brief...");
 
   const { data: subscribers } = await supabase.from('subscribers').select('*');
   if (!subscribers || subscribers.length === 0) {
