@@ -3,90 +3,211 @@
 import { useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
+// --- CONFIGURATION ---
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// THE MEGA MENU CONFIGURATION
-const CATEGORIES = [
-  { id: 'technology', label: '💻 Technology' },
-  { id: 'finance', label: '📈 Finance' },
-  { id: 'crypto', label: '₿ Crypto' },
-  { id: 'sports', label: '⚽ Sports' },
-  { id: 'ai', label: '🤖 AI & Future' },
-  { id: 'business', label: '💼 Business' },
-  { id: 'entertainment', label: '🎬 Entertainment' },
-  { id: 'health', label: '❤️ Health' },
-  { id: 'science', label: '🔬 Science' },
-  { id: 'gaming', label: '🎮 Gaming' },
-  { id: 'world', label: '🌍 World News' },
-  { id: 'politics', label: '⚖️ Politics' },
+// The exact keys from your backend script, organized for the UI
+const CATEGORY_GROUPS = [
+  {
+    title: "Technology",
+    items: [
+      { id: 'tech_general', label: 'Tech News' },
+      { id: 'tech_ai', label: 'Artificial Intelligence' },
+      { id: 'tech_coding', label: 'Coding & Dev' },
+      { id: 'tech_mobile', label: 'Mobile' },
+      { id: 'tech_gadgets', label: 'Gadgets' },
+    ]
+  },
+  {
+    title: "Finance & Crypto",
+    items: [
+      { id: 'finance_markets', label: 'Stock Markets' },
+      { id: 'finance_vc', label: 'Venture Capital' },
+      { id: 'crypto_bitcoin', label: 'Bitcoin' },
+      { id: 'crypto_ethereum', label: 'Ethereum' },
+      { id: 'crypto_general', label: 'Crypto News' },
+    ]
+  },
+  {
+    title: "Sports",
+    items: [
+      { id: 'sports_general', label: 'Top Sports' },
+      { id: 'sports_soccer', label: 'Soccer' },
+      { id: 'sports_nba', label: 'NBA' },
+      { id: 'sports_nfl', label: 'NFL' },
+      { id: 'sports_f1', label: 'F1 Racing' },
+      { id: 'sports_tennis', label: 'Tennis' },
+      { id: 'sports_golf', label: 'Golf' },
+    ]
+  },
+  {
+    title: "Science & Life",
+    items: [
+      { id: 'science_space', label: 'Space' },
+      { id: 'science_neuroscience', label: 'Neuroscience' },
+      { id: 'life_gaming', label: 'Gaming' },
+      { id: 'life_movies', label: 'Movies' },
+      { id: 'life_cars', label: 'Cars' },
+    ]
+  }
 ];
 
 export default function Home() {
   const [email, setEmail] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
   const toggleCategory = (id: string) => {
-    if (selected.includes(id)) setSelected(selected.filter((item) => item !== id));
-    else setSelected([...selected, id]);
+    setSelected(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
   };
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    if (selected.length === 0) {
-      setMessage('Please select at least one topic.');
-      setLoading(false);
-      return;
+    if (!email || selected.length === 0) return;
+
+    setStatus('loading');
+
+    // 1. Check if user exists
+    const { data: existing } = await supabase
+      .from('subscribers')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    let error;
+
+    if (existing) {
+      // Update existing user
+      const { error: updateError } = await supabase
+        .from('subscribers')
+        .update({ interests: selected })
+        .eq('email', email);
+      error = updateError;
+    } else {
+      // Create new user
+      const { error: insertError } = await supabase
+        .from('subscribers')
+        .insert([{ email, interests: selected }]);
+      error = insertError;
     }
 
-    const { error } = await supabase
-      .from('subscribers')
-      .insert([{ email, interests: selected }]);
-
     if (error) {
-      if (error.code === '23505') setMessage('You are already subscribed!');
-      else setMessage('Error: ' + error.message);
+      console.error(error);
+      setStatus('error');
     } else {
-      setMessage('Success! You are on the list.');
+      setStatus('success');
       setEmail('');
       setSelected([]);
     }
-    setLoading(false);
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-50 text-gray-900 font-sans">
-      <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-2xl border border-gray-100">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-extrabold tracking-tight mb-2">Briefly.</h1>
-          <p className="text-gray-500">Curate your daily intelligence feed.</p>
-        </div>
-        <form onSubmit={handleSubscribe} className="space-y-8">
-          <div>
-            <label className="block text-sm font-bold mb-2 text-gray-700 uppercase">Email Address</label>
-            <input type="email" placeholder="you@example.com" className="w-full p-4 border rounded-lg" value={email} onChange={(e) => setEmail(e.target.value)} required />
+    <main className="min-h-screen bg-[#F3F4F6] flex flex-col items-center py-20 px-4 font-sans text-gray-900">
+
+      {/* Header */}
+      <div className="text-center mb-12">
+        <h1 className="text-6xl font-extrabold tracking-tighter text-black mb-4">Briefly.</h1>
+        <p className="text-xl text-gray-500 font-medium">Build your perfect daily digest.</p>
+      </div>
+
+      {/* Card */}
+      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl p-8 border border-gray-200">
+
+        {status === 'success' ? (
+          <div className="text-center py-16">
+            <div className="text-5xl mb-4">✅</div>
+            <h2 className="text-3xl font-bold mb-2">You're on the list!</h2>
+            <p className="text-gray-500">Watch your inbox for your first briefing.</p>
+            <button
+              onClick={() => setStatus('idle')}
+              className="mt-8 text-blue-600 font-semibold hover:underline"
+            >
+              Subscribe another email
+            </button>
           </div>
-          <div>
-            <label className="block text-sm font-bold mb-3 text-gray-700 uppercase">Select your mix</label>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {CATEGORIES.map((cat) => (
-                <label key={cat.id} className={`flex flex-col items-center p-4 border rounded-xl cursor-pointer ${selected.includes(cat.id) ? 'bg-black text-white' : 'bg-white hover:bg-gray-50'}`}>
-                  <input type="checkbox" className="hidden" checked={selected.includes(cat.id)} onChange={() => toggleCategory(cat.id)} />
-                  <span className="font-semibold text-center">{cat.label}</span>
-                </label>
-              ))}
+        ) : (
+          <form onSubmit={handleSubscribe} className="space-y-8">
+
+            {/* Email Input */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">
+                1. Enter your email
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-black focus:outline-none text-lg transition-all"
+              />
             </div>
-          </div>
-          <button disabled={loading} className="w-full bg-black text-white font-bold p-4 rounded-lg hover:bg-gray-800 disabled:opacity-50">
-            {loading ? 'Processing...' : 'Subscribe Free'}
-          </button>
-          {message && <div className="text-center font-medium p-4">{message}</div>}
-        </form>
+
+            {/* Category Selection */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 uppercase tracking-wider mb-4">
+                2. Choose your mix
+              </label>
+
+              <div className="space-y-6">
+                {CATEGORY_GROUPS.map((group) => (
+                  <div key={group.title}>
+                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-3 ml-1">{group.title}</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {group.items.map((cat) => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => toggleCategory(cat.id)}
+                          className={`
+                            px-4 py-2 rounded-full text-sm font-semibold transition-all duration-200 border
+                            ${selected.includes(cat.id)
+                              ? 'bg-black text-white border-black scale-105 shadow-md'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400 hover:bg-gray-50'
+                            }
+                          `}
+                        >
+                          {selected.includes(cat.id) && <span className="mr-2">✓</span>}
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={status === 'loading' || !email || selected.length === 0}
+              className={`
+                w-full py-4 rounded-xl font-bold text-lg tracking-wide transition-all
+                ${status === 'loading'
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-black text-white hover:bg-gray-800 hover:scale-[1.01] shadow-lg'
+                }
+              `}
+            >
+              {status === 'loading' ? 'Setting up...' : 'Start My Subscription'}
+            </button>
+
+            {status === 'error' && (
+              <p className="text-center text-red-500 text-sm font-medium">
+                Something went wrong. Please try again.
+              </p>
+            )}
+          </form>
+        )}
+      </div>
+
+      <div className="mt-12 text-center text-gray-400 text-sm">
+        <p>© 2024 Briefly Inc. No spam, ever.</p>
       </div>
     </main>
   );
