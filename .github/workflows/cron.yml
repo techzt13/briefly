@@ -1,7 +1,8 @@
 name: Send Daily Newsletter
 on:
   schedule:
-    - cron: '0 22 * * *'
+    # Changed from 22 to 23 (23:00 UTC = 07:00 AM Hong Kong)
+    - cron: '0 23 * * *'
   workflow_dispatch:
 
 jobs:
